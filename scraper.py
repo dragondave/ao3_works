@@ -1,24 +1,75 @@
-# This is a template for a Python scraper on morph.io (https://morph.io)
-# including some code snippets below that you should find helpful
+import requests
+import lxml.html
+from PyRSS2Gen import RSSItem, RSS2, Guid
+import requests_cache
+from urllib.parse import urljoin
+# from datetime import now
+import dateparser
 
-# import scraperwiki
-# import lxml.html
-#
-# # Read in a page
-# html = scraperwiki.scrape("http://foo.com")
-#
-# # Find something on the page using css selectors
-# root = lxml.html.fromstring(html)
-# root.cssselect("div[align='left']")
-#
-# # Write out to the sqlite database using scraperwiki library
-# scraperwiki.sqlite.save(unique_keys=['name'], data={"name": "susan", "occupation": "software developer"})
-#
-# # An arbitrary query against the database
-# scraperwiki.sql.select("* from data where 'name'='peter'")
+requests_cache.install_cache() # DEBUG ONLY
 
-# You don't have to do things with the ScraperWiki and lxml libraries.
-# You can use whatever libraries you want: https://morph.io/documentation/python
-# All that matters is that your final data is written to an SQLite database
-# called "data.sqlite" in the current working directory which has at least a table
-# called "data".
+USER = "kimaracretak"
+
+BASE_URL = "https://archiveofourown.org/users/{}/works".format(USER)
+
+html = requests.get(BASE_URL)
+
+with open("h.html", "w") as f:
+    f.write(html.text)
+
+items = []
+root = lxml.html.fromstring(html.content)
+for work in root.xpath("//li[@class='work blurb group']"):
+    for a in work.xpath(".//h4/a"):
+        if "/works/" in a.attrib["href"]:
+            title = a.text
+            link = urljoin(BASE_URL, a.attrib["href"])
+            guid = link
+        if "rel" in a.attrib:
+            author = a.text # NOT COMPLIANT
+
+    description = work.xpath(".//blockquote[@class='userstuff summary']")[0].text_content().strip()
+    category = work.xpath(".//a[@class='tag']")[0].text
+    try:
+        comments = urljoin(BASE_URL, work.xpath(".//dd[@class='comments']/a/@href")[0])
+    except Exception:
+        comments = None
+    pubDate = dateparser.parse(work.xpath(".//p[@class='datetime']")[0].text)
+    item = RSSItem(
+            title = title,
+            link = link,
+            description = description,
+            guid = Guid(guid),
+            pubDate = pubDate,
+            comments = comments)
+    items.append(item)
+    print (title, link, author, description, category,comments, pubDate)
+    item = None
+    link = None
+    description = None
+    guid = None
+    pubDate = None
+    comments = None
+
+
+
+rss = RSS2(
+        title = "AO3 works of {}".format(USER),
+        link = BASE_URL,
+        description = "{}'s AO3 works".format(USER),
+  #      lastBuildDate = now(),
+
+        items = items
+         #   RSSItem(
+         #       title = title,
+         #       link = link,
+         #       description = description,
+         #       guid = Guid(guid),
+         #       pubDate = pubDate,
+         #       # author = author, TODO
+         #       # category = category, # TODO fails?
+         #       comments = comments)]
+        )
+
+rss.write_xml(open("fool.xml", "w"))
+
